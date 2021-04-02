@@ -1,0 +1,12 @@
+[
+{
+  "directory": "D:/C++-program/json-tutorial/build",
+  "command": "C:\\PROGRA~1\\MINGW-~1\\X86_64~1.0-P\\mingw64\\bin\\gcc.exe    -ansi -pedantic -Wall -g   -o CMakeFiles\\leptjson.dir\\leptjson.c.obj   -c D:\\C++-program\\json-tutorial\\tutorial01\\leptjson.c",
+  "file": "D:/C++-program/json-tutorial/tutorial01/leptjson.c"
+},
+{
+  "directory": "D:/C++-program/json-tutorial/build",
+  "command": "C:\\PROGRA~1\\MINGW-~1\\X86_64~1.0-P\\mingw64\\bin\\gcc.exe    -ansi -pedantic -Wall -g   -o CMakeFiles\\leptjson_test.dir\\test.c.obj   -c D:\\C++-program\\json-tutorial\\tutorial01\\test.c",
+  "file": "D:/C++-program/json-tutorial/tutorial01/test.c"
+}
+]

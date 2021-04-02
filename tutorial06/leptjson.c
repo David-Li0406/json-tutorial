@@ -16,6 +16,7 @@
 #define EXPECT(c, ch)       do { assert(*c->json == (ch)); c->json++; } while(0)
 #define ISDIGIT(ch)         ((ch) >= '0' && (ch) <= '9')
 #define ISDIGIT1TO9(ch)     ((ch) >= '1' && (ch) <= '9')
+/*PUTC用来把c->stack指向传入的字符*/
 #define PUTC(c, ch)         do { *(char*)lept_context_push(c, sizeof(char)) = (ch); } while(0)
 
 typedef struct {
@@ -127,8 +128,9 @@ static void lept_encode_utf8(lept_context* c, unsigned u) {
 
 #define STRING_ERROR(ret) do { c->top = head; return ret; } while(0)
 
-static int lept_parse_string(lept_context* c, lept_value* v) {
-    size_t head = c->top, len;
+static int lept_parse_string_raw(lept_context* c, char** str, size_t* len){
+    /*head一开始指向json字符串首*/
+    size_t head = c->top;
     unsigned u, u2;
     const char* p;
     EXPECT(c, '\"');
@@ -137,11 +139,13 @@ static int lept_parse_string(lept_context* c, lept_value* v) {
         char ch = *p++;
         switch (ch) {
             case '\"':
-                len = c->top - head;
-                lept_set_string(v, (const char*)lept_context_pop(c, len), len);
+            /*此时字符串结束*/
+                *len = c->top - head;
+                *str = lept_context_pop(c, *len);
                 c->json = p;
                 return LEPT_PARSE_OK;
             case '\\':
+            /*解析uncode*/
                 switch (*p++) {
                     case '\"': PUTC(c, '\"'); break;
                     case '\\': PUTC(c, '\\'); break;
@@ -179,6 +183,17 @@ static int lept_parse_string(lept_context* c, lept_value* v) {
                 PUTC(c, ch);
         }
     }
+}
+
+static int lept_parse_string(lept_context* c, lept_value* v) {
+    /*对lept_parse_string的功能进行了重构分解，新增了lept_parse_string_raw来解析json字符串 */
+    /*lept_parse_string用来把解析出来的字符串用来初始化lept_value v*/
+    int ret;
+    char* s;
+    size_t len;
+    if ((ret = lept_parse_string_raw(c, &s, &len)) == LEPT_PARSE_OK)
+        lept_set_string(v, s, len);
+    return ret;
 }
 
 static int lept_parse_value(lept_context* c, lept_value* v);
@@ -227,7 +242,7 @@ static int lept_parse_array(lept_context* c, lept_value* v) {
 }
 
 static int lept_parse_object(lept_context* c, lept_value* v) {
-    size_t size;
+    size_t size, i;
     lept_member m;
     int ret;
     EXPECT(c, '{');
@@ -242,9 +257,25 @@ static int lept_parse_object(lept_context* c, lept_value* v) {
     m.k = NULL;
     size = 0;
     for (;;) {
+        char* str;
         lept_init(&m.v);
         /* \todo parse key to m.k, m.klen */
+        if(*c->json != '\"'){
+            ret = LEPT_PARSE_MISS_KEY;
+            break; 
+        }
+        /*c++字符串末尾需要加上'\0'*/
+        lept_parse_string_raw(c,&str,&m.klen);
+        memcpy(m.k = (char*)malloc(m.klen + 1), str, m.klen);
+        m.k[m.klen] = '\0';
         /* \todo parse ws colon ws */
+        lept_parse_whitespace(c);
+        if(*c->json != ':'){
+            ret = LEPT_PARSE_MISS_COLON;
+            break;
+        }
+        c->json++;
+        lept_parse_whitespace(c);
         /* parse value */
         if ((ret = lept_parse_value(c, &m.v)) != LEPT_PARSE_OK)
             break;
@@ -252,8 +283,26 @@ static int lept_parse_object(lept_context* c, lept_value* v) {
         size++;
         m.k = NULL; /* ownership is transferred to member on stack */
         /* \todo parse ws [comma | right-curly-brace] ws */
+        lept_parse_whitespace(c);
+        if(*c->json == ','){
+            c->json++;
+        }else if(*c->json == '}'){
+            c->json++;
+            v->type = LEPT_OBJECT;
+            v->u.o.size = size;
+            size *= sizeof(lept_member);
+            memcpy((v->u.o.m = (lept_member*)malloc(size)), lept_context_pop(c, size), size);
+            return LEPT_PARSE_OK;
+        }else{
+            ret = LEPT_PARSE_MISS_COMMA_OR_CURLY_BRACKET;
+            break;
+        }
+        lept_parse_whitespace(c);
     }
     /* \todo Pop and free members on the stack */
+    for(i=0;i<size;i++){
+        lept_context_pop(c, sizeof(lept_member));
+    }
     return ret;
 }
 

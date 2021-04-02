@@ -32,9 +32,11 @@ static void* lept_context_push(lept_context* c, size_t size) {
             c->size = LEPT_PARSE_STACK_INIT_SIZE;
         while (c->top + size >= c->size)
             c->size += c->size >> 1;  /* c->size * 1.5 */
-        c->stack = (char*)realloc(c->stack, c->size);
+        c->stack = (char*)realloc(c->stack, c->size); /*重新给c->stack分配c->size大小的内存*/
     }
+    /*让ret重新指向结尾位置*/
     ret = c->stack + c->top;
+    /*改变c->stack大小（这里其实还没有实际压入元素）*/
     c->top += size;
     return ret;
 }
@@ -184,9 +186,10 @@ static int lept_parse_string(lept_context* c, lept_value* v) {
 static int lept_parse_value(lept_context* c, lept_value* v);
 
 static int lept_parse_array(lept_context* c, lept_value* v) {
-    size_t size = 0;
+    size_t i, size = 0;
     int ret;
     EXPECT(c, '[');
+    lept_parse_whitespace(c);
     if (*c->json == ']') {
         c->json++;
         v->type = LEPT_ARRAY;
@@ -198,22 +201,36 @@ static int lept_parse_array(lept_context* c, lept_value* v) {
         lept_value e;
         lept_init(&e);
         if ((ret = lept_parse_value(c, &e)) != LEPT_PARSE_OK)
-            return ret;
+            break;
+        /*此时成功解析了一个对象，存在e中，类型为lept_value*/
+        /*从返回的e指向的内存中拷贝lept_value大小的内压到c的栈里*/
         memcpy(lept_context_push(c, sizeof(lept_value)), &e, sizeof(lept_value));
         size++;
-        if (*c->json == ',')
+        lept_parse_whitespace(c);
+        if (*c->json == ','){
             c->json++;
+            lept_parse_whitespace(c);
+        }
         else if (*c->json == ']') {
+            /*此时到了array 的结尾处，需要弹出解析出来的元素到v->u.a.e中*/
             c->json++;
             v->type = LEPT_ARRAY;
             v->u.a.size = size;
+            /*有多少元素就用lept_value的size乘多少*/
             size *= sizeof(lept_value);
             memcpy(v->u.a.e = (lept_value*)malloc(size), lept_context_pop(c, size), size);
             return LEPT_PARSE_OK;
         }
-        else
-            return LEPT_PARSE_MISS_COMMA_OR_SQUARE_BRACKET;
+        else{
+            ret = LEPT_PARSE_MISS_COMMA_OR_SQUARE_BRACKET;
+            break;
+        }
     }
+    /*这里需要把栈里的元素弹出来，因为在free的时候会先判断栈为空*/
+    /*用lept_free可以把每个元素的再进行嵌套递归的释放，而不仅仅是弹出*/
+    for (i = 0; i < size; i++)
+        lept_free((lept_value*)lept_context_pop(c, sizeof(lept_value)));
+    return ret;
 }
 
 static int lept_parse_value(lept_context* c, lept_value* v) {

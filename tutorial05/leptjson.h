@@ -9,7 +9,7 @@ typedef struct lept_value lept_value;
 
 struct lept_value {
     union {
-        struct { lept_value* e; size_t size; }a;    /* array:  elements, element count */
+        struct { lept_value* e; size_t size; }a;    /* array:  elements, element count */ /*这里有一个循环定义*/
         struct { char* s; size_t len; }s;           /* string: null-terminated string, string length */
         double n;                                   /* number */
     }u;

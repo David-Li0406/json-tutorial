@@ -499,7 +499,18 @@ int lept_is_equal(const lept_value* lhs, const lept_value* rhs) {
                     return 0;
             return 1;
         case LEPT_OBJECT:
-            /* \todo */
+        if (lhs->u.o.size != rhs->u.o.size)
+                return 0;
+            lept_value* temp;
+            for(i = 0; i < lhs->u.o.size;i++){
+                /*没找到当前key，返回0*/
+                if((temp = lept_find_object_value(&rhs->u.o, lhs->u.o.m[i].k, lhs->u.o.m[i].klen)) == NULL){
+                    return 0;
+                }
+                /*当前key对应的value不一样，返回0*/
+                if (!lept_is_equal(&lhs->u.o.m[i].v, temp))
+                    return 0;
+            }
             return 1;
         default:
             return 1;
@@ -608,8 +619,12 @@ void lept_popback_array_element(lept_value* v) {
 
 lept_value* lept_insert_array_element(lept_value* v, size_t index) {
     assert(v != NULL && v->type == LEPT_ARRAY && index <= v->u.a.size);
-    /* \todo */
-    return NULL;
+    size_t i;
+    /*把v先扩大一位，index后面的元素依次向后移动，最后插入*/
+    lept_pushback_array_element(v);
+    for(i = v->u.a.size - 1 ; i > index ; i--){
+        /*to do*/
+    }
 }
 
 void lept_erase_array_element(lept_value* v, size_t index, size_t count) {
